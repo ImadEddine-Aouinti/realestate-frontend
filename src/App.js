@@ -7,7 +7,9 @@ import Login from './pages/Login.js';
 import Register from './pages/Register.js';
 import Profile from './pages/Profile.js';
 import Admin from './pages/Admin.js';
-import PropertyDetails from './pages/PropertyDetails.jsx'; // ← AJOUTER CET IMPORT
+import PropertyDetails from './pages/PropertyDetails.jsx';
+import AddProperty from './pages/AddProperty.js'; // ← NOUVEL IMPORT
+import MyProperties from './pages/MyProperties.js'; // ← NOUVEL IMPORT
 import './App.css';
 
 console.log('🔧 App.js chargé - Vérification des imports...');
@@ -24,7 +26,27 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/property/:id" element={<PropertyDetails />} /> {/* ← AJOUTER CETTE ROUTE */}
+            <Route path="/property/:id" element={<PropertyDetails />} />
+            
+            {/* ========== NOUVELLES ROUTES AJOUTÉES ========== */}
+            <Route 
+              path="/add-property" 
+              element={
+                <ProtectedRoute>
+                  <AddProperty />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/my-properties" 
+              element={
+                <ProtectedRoute>
+                  <MyProperties />
+                </ProtectedRoute>
+              } 
+            />
+            {/* ============================================= */}
             
             <Route 
               path="/profile" 

@@ -4,12 +4,12 @@ import api from './authApi.js';
 const PROPERTY_API_URL = '/properties';
 
 export const propertyApi = {
+
   // Récupérer toutes les propriétés avec filtres
   async getAllProperties(filters = {}) {
     try {
       console.log('📤 Chargement des propriétés avec filtres:', filters);
       
-      // Vérifier si des filtres sont actifs
       const hasActiveFilters = filters.type || filters.status || filters.minPrice || filters.maxPrice;
       
       let url = PROPERTY_API_URL;
@@ -137,6 +137,95 @@ export const propertyApi = {
     } catch (error) {
       console.error('❌ Erreur purchase:', error);
       throw error;
+    }
+  },
+
+  // ========== NOUVELLES MÉTHODES AJOUTÉES ==========
+
+  // Créer une nouvelle propriété
+  // Dans propertyApi.js, modifier la méthode createProperty
+async createProperty(propertyData) {
+  try {
+    console.log('📤 Création de propriété:', propertyData);
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Utilisateur non authentifié');
+    }
+
+    // Ajouter une image par défaut si aucune image n'est fournie
+    const dataToSend = {
+      ...propertyData,
+      // Ajouter une image par défaut si aucune image
+      images: propertyData.images && propertyData.images.length > 0 
+        ? propertyData.images 
+        : [
+            {
+              url: `https://via.placeholder.com/600x400?text=${encodeURIComponent(propertyData.title)}`,
+              altText: propertyData.title,
+              isMain: true
+            }
+          ]
+    };
+
+    const response = await api.post(PROPERTY_API_URL, dataToSend);
+    console.log('✅ Propriété créée avec succès:', response.data);
+    
+    // Récupérer l'utilisateur pour simuler l'owner
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    
+    // Retourner la propriété avec l'owner
+    return {
+      ...response.data,
+      owner: user, // Ajouter l'owner dans la réponse
+      ownerId: user.id
+    };
+    
+  } catch (error) {
+    console.error('❌ Erreur création propriété:', error);
+    throw error;
+  }
+},
+
+  // Mettre à jour une propriété
+  async updateProperty(id, propertyData) {
+    try {
+      console.log(`🔄 Mise à jour propriété ${id}:`, propertyData);
+      const response = await api.put(`${PROPERTY_API_URL}/${id}`, propertyData);
+      console.log('✅ Propriété mise à jour:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ Erreur mise à jour propriété ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Supprimer une propriété
+  async deleteProperty(id) {
+    try {
+      console.log(`🗑️ Suppression propriété ${id}`);
+      await api.delete(`${PROPERTY_API_URL}/${id}`);
+      console.log('✅ Propriété supprimée:', id);
+      return true;
+    } catch (error) {
+      console.error(`❌ Erreur suppression propriété ${id}:`, error);
+      throw error;
+    }
+  },
+
+  // Récupérer les propriétés de l'utilisateur connecté
+  async getUserProperties() {
+    try {
+      console.log('🔄 Chargement des propriétés utilisateur...');
+      const response = await api.get(`${PROPERTY_API_URL}/my-properties`);
+      console.log('✅ Propriétés utilisateur chargées:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur chargement propriétés utilisateur:', error);
+      // Fallback : filtrer les propriétés du mock pour l'utilisateur
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const allProperties = this.getMockProperties();
+      return allProperties.filter(p => p.ownerId === user.id);
     }
   }
 };

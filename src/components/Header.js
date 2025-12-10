@@ -6,6 +6,7 @@ const Header = () => {
   const navigate = useNavigate();
   const user = authUtils.getUser();
   const isAdmin = authUtils.isAdmin();
+  const isAuthenticated = authUtils.isAuthenticated();
 
   const handleLogout = async () => {
     try {
@@ -38,6 +39,28 @@ const Header = () => {
           <nav className="flex items-center space-x-6">
             {user ? (
               <>
+                {/* ===== NOUVEAUX LIENS AJOUTÉS ===== */}
+                {!isAdmin && (
+                  <>
+                    <Link 
+                      to="/my-properties" 
+                      className="flex items-center space-x-1 px-3 py-2 rounded-lg hover:bg-white/10 transition-all duration-200 group"
+                    >
+                      <span>🏠</span>
+                      <span className="font-medium">Mes Propriétés</span>
+                    </Link>
+                    
+                    <Link 
+                      to="/add-property" 
+                      className="flex items-center space-x-1 px-4 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-all duration-200 shadow-lg hover:shadow-xl"
+                    >
+                      <span className="text-lg">+</span>
+                      <span>Ajouter</span>
+                    </Link>
+                  </>
+                )}
+                {/* ================================ */}
+
                 <Link 
                   to="/profile" 
                   className="flex items-center space-x-1 px-3 py-2 rounded-lg hover:bg-white/10 transition-all duration-200 group"

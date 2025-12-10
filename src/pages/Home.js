@@ -9,7 +9,7 @@ const Home = () => {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     type: '',
-    status: 'AVAILABLE',
+    status: '',
     minPrice: '',
     maxPrice: ''
   });
