@@ -6,7 +6,9 @@ import Home from './pages/Home.js';
 import Login from './pages/Login.js';
 import Register from './pages/Register.js';
 import Profile from './pages/Profile.js';
-import Admin from './pages/Admin.js';
+// CORRIGEZ CETTE LIGNE ↓ Supprimez ou changez selon ce qui existe
+// Si vous avez supprimé src/pages/Admin.js, importez depuis admin/
+import Admin from './pages/admin/Admin.js'; // ← AJOUTEZ .js
 import PropertyDetails from './pages/PropertyDetails.jsx';
 import AddProperty from './pages/AddProperty.js';
 import MyProperties from './pages/MyProperties.js';
