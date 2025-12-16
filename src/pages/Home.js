@@ -20,6 +20,16 @@ const Home = () => {
     citiesCovered: 0,
     yearsExperience: 0
   });
+  
+  // États pour les modales
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [currentPropertyId, setCurrentPropertyId] = useState(null);
+  const [message, setMessage] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState('info'); // 'info', 'success', 'error', 'warning'
 
   const user = authUtils.getUser();
   const isAuthenticated = authUtils.isAuthenticated();
@@ -192,12 +202,11 @@ const Home = () => {
 
   const handleFavoriteToggle = async (propertyId) => {
     if (!isAuthenticated) {
-      alert('Veuillez vous connecter pour ajouter aux favoris');
-      navigate('/login', {
-        state: {
-          message: 'Veuillez vous connecter pour gérer vos favoris'
-        }
-      });
+      setModalTitle('Connexion requise');
+      setModalMessage('Veuillez vous connecter pour ajouter des propriétés à vos favoris');
+      setModalType('info');
+      setShowLoginModal(true);
+      setCurrentPropertyId(propertyId);
       return;
     }
 
@@ -208,36 +217,64 @@ const Home = () => {
       if (isCurrentlyFavorite) {
         await propertyApi.removeFromFavorites(propertyId);
         setFavorites(favorites.filter(id => id !== propertyId));
+        setModalTitle('Retiré des favoris');
+        setModalMessage('Cette propriété a été retirée de vos favoris');
+        setModalType('success');
       } else {
         await propertyApi.addToFavorites(propertyId);
         setFavorites([...favorites, propertyId]);
+        setModalTitle('Ajouté aux favoris');
+        setModalMessage('Cette propriété a été ajoutée à vos favoris');
+        setModalType('success');
       }
+      setShowMessageModal(true);
     } catch (error) {
       console.error('❌ Erreur avec les favoris:', error);
-      alert('Erreur lors de la modification des favoris');
+      setModalTitle('Erreur');
+      setModalMessage('Erreur lors de la modification des favoris');
+      setModalType('error');
+      setShowMessageModal(true);
     }
   };
 
-  const handleContactAgent = async (propertyId) => {
+  const handleContactAgent = (propertyId) => {
     if (!isAuthenticated) {
-      navigate('/login', {
-        state: {
-          message: 'Veuillez vous connecter pour contacter l\'agent',
-          returnUrl: `/property/${propertyId}`
-        }
-      });
+      setModalTitle('Connexion requise');
+      setModalMessage('Veuillez vous connecter pour contacter l\'agent');
+      setModalType('info');
+      setShowLoginModal(true);
+      setCurrentPropertyId(propertyId);
+      return;
+    }
+
+    setCurrentPropertyId(propertyId);
+    setMessage('');
+    setShowContactModal(true);
+  };
+
+  const submitContactMessage = async () => {
+    if (!message.trim()) {
+      setModalTitle('Message vide');
+      setModalMessage('Veuillez entrer un message');
+      setModalType('warning');
+      setShowMessageModal(true);
       return;
     }
 
     try {
-      const message = prompt('Votre message à l\'agent:');
-      if (message) {
-        await propertyApi.contactAgent(propertyId, message);
-        alert('Message envoyé à l\'agent!');
-      }
+      await propertyApi.contactAgent(currentPropertyId, message);
+      setModalTitle('Message envoyé');
+      setModalMessage('Votre message a été envoyé à l\'agent avec succès');
+      setModalType('success');
+      setShowMessageModal(true);
+      setShowContactModal(false);
+      setMessage('');
     } catch (error) {
       console.error('Erreur contact agent:', error);
-      alert('Erreur lors de l\'envoi du message');
+      setModalTitle('Erreur');
+      setModalMessage('Erreur lors de l\'envoi du message');
+      setModalType('error');
+      setShowMessageModal(true);
     }
   };
 
@@ -263,6 +300,46 @@ const Home = () => {
     setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
   };
 
+  const goToLogin = () => {
+    setShowLoginModal(false);
+    navigate('/login', {
+      state: {
+        message: modalMessage,
+        returnUrl: `/property/${currentPropertyId}`
+      }
+    });
+  };
+
+  // Fonction pour obtenir les styles selon le type de modal
+  const getModalStyles = (type) => {
+    const baseStyles = "bg-gradient-to-r rounded-t-2xl p-6 ";
+    switch(type) {
+      case 'success':
+        return baseStyles + "from-green-500 to-emerald-500";
+      case 'error':
+        return baseStyles + "from-red-500 to-rose-500";
+      case 'warning':
+        return baseStyles + "from-yellow-500 to-amber-500";
+      case 'info':
+      default:
+        return baseStyles + "from-blue-500 to-indigo-500";
+    }
+  };
+
+  const getModalIcon = (type) => {
+    switch(type) {
+      case 'success':
+        return '✅';
+      case 'error':
+        return '❌';
+      case 'warning':
+        return '⚠️';
+      case 'info':
+      default:
+        return 'ℹ️';
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
@@ -276,6 +353,106 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      {/* Modales */}
+      
+      {/* Modal de connexion */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-scaleIn">
+            <div className={getModalStyles('info')}>
+              <div className="flex items-center space-x-3">
+                <span className="text-3xl">🔐</span>
+                <h3 className="text-xl font-bold text-white">{modalTitle}</h3>
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-700 mb-6">{modalMessage}</p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={goToLogin}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  Se connecter
+                </button>
+                <button
+                  onClick={() => setShowLoginModal(false)}
+                  className="flex-1 border border-gray-300 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-200"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de message */}
+      {showMessageModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-scaleIn">
+            <div className={getModalStyles(modalType)}>
+              <div className="flex items-center space-x-3">
+                <span className="text-3xl">{getModalIcon(modalType)}</span>
+                <h3 className="text-xl font-bold text-white">{modalTitle}</h3>
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-700 mb-6">{modalMessage}</p>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowMessageModal(false)}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de contact */}
+      {showContactModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-scaleIn">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-2xl p-6">
+              <div className="flex items-center space-x-3">
+                <span className="text-3xl">✉️</span>
+                <h3 className="text-xl font-bold text-white">Contacter l'agent</h3>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Votre message
+                </label>
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Bonjour, je suis intéressé(e) par cette propriété. Pouvez-vous me donner plus d'informations ?"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition-all duration-200 min-h-[120px] resize-none"
+                  rows={4}
+                />
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={submitContactMessage}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-lg hover:shadow-xl"
+                >
+                  Envoyer
+                </button>
+                <button
+                  onClick={() => setShowContactModal(false)}
+                  className="flex-1 border border-gray-300 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-200"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section Dynamique */}
       <div className="relative h-screen overflow-hidden">
         {/* Carousel Background */}
@@ -349,7 +526,15 @@ const Home = () => {
                 >
                   {heroSlides[currentSlide].cta}
                 </button>
-                <button className="border-2 border-white text-white hover:bg-white hover:text-gray-900 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200">
+                <button 
+                  onClick={() => {
+                    setModalTitle('Contactez-nous');
+                    setModalMessage('Notre équipe vous répondra dans les plus brefs délais');
+                    setModalType('info');
+                    setShowMessageModal(true);
+                  }}
+                  className="border-2 border-white text-white hover:bg-white hover:text-gray-900 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200"
+                >
                   📞 Nous Contacter
                 </button>
               </div>
@@ -429,7 +614,7 @@ const Home = () => {
                 onChange={handleFilterChange}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition-all duration-200"
               >
-                <option value="">Tous les statuts</option> {/* Nouvelle option ajoutée */}
+                <option value="">Tous les statuts</option>
                 <option value="AVAILABLE">🟢 Disponible</option>
                 <option value="PENDING">🟡 En attente</option>
                 <option value="SOLD">🔴 Vendu</option>
@@ -546,7 +731,7 @@ const Home = () => {
                       </h3>
                       <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-semibold">
                         {property.type === 'HOUSE' ? '🏠 Maison' :
-                         property.type === 'APARTMENT' ? '🏢Appar' : '🏰 Villa'}
+                         property.type === 'APARTMENT' ? '🏢 Appartement' : '🏰 Villa'}
                       </span>
                     </div>
                     
@@ -584,6 +769,24 @@ const Home = () => {
           )}
         </div>
       </div>
+
+      {/* Ajouter une animation CSS pour les modales */}
+      <style jsx>{`
+        @keyframes scaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        .animate-scaleIn {
+          animation: scaleIn 0.2s ease-out;
+        }
+      `}</style>
     </div>
   );
 };
