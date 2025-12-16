@@ -8,15 +8,12 @@ import Register from './pages/Register.js';
 import Profile from './pages/Profile.js';
 import Admin from './pages/Admin.js';
 import PropertyDetails from './pages/PropertyDetails.jsx';
-import AddProperty from './pages/AddProperty.js'; // ← NOUVEL IMPORT
-import MyProperties from './pages/MyProperties.js'; // ← NOUVEL IMPORT
+import AddProperty from './pages/AddProperty.js';
+import MyProperties from './pages/MyProperties.js';
+import Favorites from './pages/Favorites.js';
 import './App.css';
 
-console.log('🔧 App.js chargé - Vérification des imports...');
-
 function App() {
-  console.log('🎯 App component rendering');
-  
   return (
     <Router>
       <div className="App">
@@ -28,7 +25,7 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/property/:id" element={<PropertyDetails />} />
             
-            {/* ========== NOUVELLES ROUTES AJOUTÉES ========== */}
+            {/* Routes protégées utilisateur */}
             <Route 
               path="/add-property" 
               element={
@@ -46,7 +43,16 @@ function App() {
                 </ProtectedRoute>
               } 
             />
-            {/* ============================================= */}
+            
+            {/* Route Favoris */}
+            <Route 
+              path="/favorites" 
+              element={
+                <ProtectedRoute>
+                  <Favorites />
+                </ProtectedRoute>
+              } 
+            />
             
             <Route 
               path="/profile" 
@@ -57,6 +63,7 @@ function App() {
               } 
             />
             
+            {/* Route admin */}
             <Route 
               path="/admin" 
               element={

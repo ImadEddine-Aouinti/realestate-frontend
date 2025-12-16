@@ -1,10 +1,8 @@
 import api from './authApi.js';
 
-// Correction : utilisez le bon chemin - sans /api car déjà dans la baseURL
 const PROPERTY_API_URL = '/properties';
 
 export const propertyApi = {
-
   // Récupérer toutes les propriétés avec filtres
   async getAllProperties(filters = {}) {
     try {
@@ -81,111 +79,119 @@ export const propertyApi = {
     }
   },
 
-  // Récupérer les favoris de l'utilisateur
-  async getUserFavorites() {
+  // ========== FONCTIONNALITÉS FAVORIS ==========
+
+  // Récupérer les propriétés favorites
+  async getFavoriteProperties() {
     try {
       const response = await api.get(`${PROPERTY_API_URL}/favorites`);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur favorites API:', error);
+      console.error('❌ Erreur récupération propriétés favorites:', error);
       return [];
     }
   },
 
-  // Ajouter aux favoris
-  async addToFavorites(propertyId) {
+  // Récupérer toutes les propriétés avec statut favori
+  async getPropertiesWithFavorites() {
     try {
-      console.log('⭐ Ajout aux favoris:', propertyId);
-      const response = await api.post(`${PROPERTY_API_URL}/${propertyId}/favorite`);
+      const response = await api.get(`${PROPERTY_API_URL}/with-favorites`);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur add favorite:', error);
+      console.error('❌ Erreur récupération propriétés avec favoris:', error);
+      return this.getAllProperties();
+    }
+  },
+
+  // Vérifier si une propriété est dans les favoris
+  async getFavoriteStatus(propertyId) {
+    try {
+      const response = await api.get(`${PROPERTY_API_URL}/${propertyId}/favorite-status`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur vérification statut favori:', error);
+      return false;
+    }
+  },
+
+  // AJOUTER CETTE MÉTHODE - Endpoint spécifique pour les favoris
+  async toggleFavorite(propertyId) {
+    try {
+      // D'abord vérifier si c'est déjà un favori
+      const isFavorite = await this.getFavoriteStatus(propertyId);
+      
+      if (isFavorite) {
+        // Retirer des favoris
+        const response = await api.delete(`/favorites/${propertyId}`);
+        console.log('❌ Retiré des favoris:', propertyId);
+        return { isFavorite: false, message: 'Retiré des favoris' };
+      } else {
+        // Ajouter aux favoris
+        const response = await api.post('/favorites', { propertyId });
+        console.log('⭐ Ajouté aux favoris:', propertyId);
+        return { isFavorite: true, message: 'Ajouté aux favoris' };
+      }
+    } catch (error) {
+      console.error('❌ Erreur toggle favorite:', error);
       throw error;
     }
   },
 
-  // Retirer des favoris
-  async removeFromFavorites(propertyId) {
-    try {
-      console.log('❌ Retrait des favoris:', propertyId);
-      const response = await api.delete(`${PROPERTY_API_URL}/${propertyId}/favorite`);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur remove favorite:', error);
-      throw error;
-    }
-  },
-
-  // Contacter l'agent pour une propriété
-  async contactAgent(propertyId, message) {
-    try {
-      const response = await api.post(`${PROPERTY_API_URL}/${propertyId}/contact`, {
-        message
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur contact agent:', error);
-      throw error;
-    }
-  },
-
-  // Acheter une propriété (action protégée)
-  async purchaseProperty(propertyId, purchaseData) {
-    try {
-      const response = await api.post(`${PROPERTY_API_URL}/${propertyId}/purchase`, purchaseData);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur purchase:', error);
-      throw error;
-    }
-  },
-
-  // ========== NOUVELLES MÉTHODES AJOUTÉES ==========
+  // ========== GESTION DES PROPRIÉTÉS ==========
 
   // Créer une nouvelle propriété
-  // Dans propertyApi.js, modifier la méthode createProperty
-async createProperty(propertyData) {
-  try {
-    console.log('📤 Création de propriété:', propertyData);
-    
-    const token = localStorage.getItem('token');
-    if (!token) {
-      throw new Error('Utilisateur non authentifié');
+  async createProperty(propertyData) {
+    try {
+      console.log('📤 Création de propriété:', propertyData);
+      
+      // Préparer les données pour l'API
+      const formattedData = {
+        title: propertyData.title,
+        description: propertyData.description,
+        price: propertyData.price,
+        type: propertyData.type,
+        status: propertyData.status || 'AVAILABLE',
+        surface: propertyData.surface,
+        bedrooms: propertyData.bedrooms,
+        bathrooms: propertyData.bathrooms,
+        rooms: propertyData.rooms,
+        yearBuilt: propertyData.yearBuilt,
+        address: propertyData.address,
+        city: propertyData.city,
+        postalCode: propertyData.postalCode,
+        country: propertyData.country,
+        hasParking: propertyData.hasParking,
+        hasGarden: propertyData.hasGarden,
+        hasPool: propertyData.hasPool,
+        hasBalcony: propertyData.hasBalcony,
+        hasElevator: propertyData.hasElevator,
+        hasAirConditioning: propertyData.hasAirConditioning,
+        hasHeating: propertyData.hasHeating,
+        additionalFeatures: propertyData.additionalFeatures,
+        images: propertyData.images && propertyData.images.length > 0 
+          ? propertyData.images.map(img => ({
+              url: img.url || `https://via.placeholder.com/600x400?text=${encodeURIComponent(propertyData.title)}`,
+              altText: img.altText || propertyData.title,
+              isMain: img.isMain || false
+            }))
+          : [
+              {
+                url: `https://via.placeholder.com/600x400?text=${encodeURIComponent(propertyData.title)}`,
+                altText: propertyData.title,
+                isMain: true
+              }
+            ]
+      };
+
+      const response = await api.post(PROPERTY_API_URL, formattedData);
+      console.log('✅ Propriété créée avec succès:', response.data);
+      return response.data;
+      
+    } catch (error) {
+      console.error('❌ Erreur création propriété:', error);
+      throw error;
     }
-
-    // Ajouter une image par défaut si aucune image n'est fournie
-    const dataToSend = {
-      ...propertyData,
-      // Ajouter une image par défaut si aucune image
-      images: propertyData.images && propertyData.images.length > 0 
-        ? propertyData.images 
-        : [
-            {
-              url: `https://via.placeholder.com/600x400?text=${encodeURIComponent(propertyData.title)}`,
-              altText: propertyData.title,
-              isMain: true
-            }
-          ]
-    };
-
-    const response = await api.post(PROPERTY_API_URL, dataToSend);
-    console.log('✅ Propriété créée avec succès:', response.data);
-    
-    // Récupérer l'utilisateur pour simuler l'owner
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    
-    // Retourner la propriété avec l'owner
-    return {
-      ...response.data,
-      owner: user, // Ajouter l'owner dans la réponse
-      ownerId: user.id
-    };
-    
-  } catch (error) {
-    console.error('❌ Erreur création propriété:', error);
-    throw error;
-  }
-},
+  },
 
   // Mettre à jour une propriété
   async updateProperty(id, propertyData) {
@@ -222,10 +228,79 @@ async createProperty(propertyData) {
       return response.data;
     } catch (error) {
       console.error('❌ Erreur chargement propriétés utilisateur:', error);
-      // Fallback : filtrer les propriétés du mock pour l'utilisateur
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const allProperties = this.getMockProperties();
-      return allProperties.filter(p => p.ownerId === user.id);
+      
+      // Fallback : récupérer toutes les propriétés et filtrer par owner
+      try {
+        const allProperties = await this.getAllProperties();
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        // Filtrer les propriétés où l'owner correspond à l'utilisateur connecté
+        return allProperties.filter(p => 
+          p.owner && p.owner.id === user.id
+        );
+      } catch (fallbackError) {
+        console.error('❌ Erreur fallback:', fallbackError);
+        return [];
+      }
+    }
+  },
+
+  // ========== MÉTHODES UTILITAIRES ==========
+
+  // Récupérer les IDs des propriétés favorites
+  async getFavoritePropertyIds() {
+    try {
+      const response = await api.get('/favorites/ids');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur récupération IDs favoris:', error);
+      return [];
+    }
+  },
+
+  // Ajouter une propriété aux favoris (méthode directe)
+  async addToFavorites(propertyId) {
+    try {
+      const response = await api.post('/favorites', { propertyId });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur add favorite:', error);
+      throw error;
+    }
+  },
+
+  // Retirer une propriété des favoris (méthode directe)
+  async removeFromFavorites(propertyId) {
+    try {
+      await api.delete(`/favorites/${propertyId}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Erreur remove favorite:', error);
+      throw error;
+    }
+  },
+
+  // Contacter l'agent pour une propriété
+  async contactAgent(propertyId, message) {
+    try {
+      const response = await api.post(`${PROPERTY_API_URL}/${propertyId}/contact`, {
+        message
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur contact agent:', error);
+      throw error;
+    }
+  },
+
+  // Acheter une propriété (action protégée)
+  async purchaseProperty(propertyId, purchaseData) {
+    try {
+      const response = await api.post(`${PROPERTY_API_URL}/${propertyId}/purchase`, purchaseData);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur purchase:', error);
+      throw error;
     }
   }
 };

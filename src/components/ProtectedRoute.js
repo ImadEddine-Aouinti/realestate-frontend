@@ -1,24 +1,21 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { authUtils } from '../utils/auth.js';
 
 const ProtectedRoute = ({ children, adminOnly = false }) => {
+  const location = useLocation();
   const isAuthenticated = authUtils.isAuthenticated();
   
-  console.log('🛡️ ProtectedRoute - Authentifié:', isAuthenticated);
-  console.log('🛡️ ProtectedRoute - AdminOnly:', adminOnly);
-  
   if (!isAuthenticated) {
-    console.log('🛡️ Redirection vers /login');
-    return <Navigate to="/login" replace />;
+    // Rediriger vers /login avec l'URL d'origine pour redirection après connexion
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
   if (adminOnly && !authUtils.isAdmin()) {
-    console.log('🛡️ Accès admin refusé, redirection vers /');
+    // Rediriger les non-admins vers la page d'accueil
     return <Navigate to="/" replace />;
   }
 
-  console.log('🛡️ Accès autorisé');
   return children;
 };
 
