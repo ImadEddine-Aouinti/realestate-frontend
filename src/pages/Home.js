@@ -731,7 +731,7 @@ const Home = () => {
                       </h3>
                       <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-semibold">
                         {property.type === 'HOUSE' ? '🏠 Maison' :
-                         property.type === 'APARTMENT' ? '🏢 Appartement' : '🏰 Villa'}
+                         property.type === 'APARTMENT' ? '🏢Appart' : '🏰 Villa'}
                       </span>
                     </div>
                     

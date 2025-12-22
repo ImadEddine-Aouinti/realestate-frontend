@@ -9,9 +9,9 @@ export const favoritesApi = {
       
       // Essayer plusieurs endpoints possibles
       const endpoints = [
-        '/api/favorites/all',           // Endpoint admin
-        '/api/favorites',               // Endpoint utilisateur
-        '/api/properties/favorites'     // Alternative
+        '/favorites/all',           // Endpoint admin
+        '/favorites',               // Endpoint utilisateur
+        '/properties/favorites'     // Alternative
       ];
       
       for (const endpoint of endpoints) {
@@ -102,7 +102,7 @@ export const favoritesApi = {
   // Récupérer les favoris de l'utilisateur connecté
   async getUserFavorites() {
     try {
-      const response = await api.get('/api/favorites');
+      const response = await api.get('/favorites');
       return response.data;
     } catch (error) {
       console.error('❌ Erreur favorites API:', error);
@@ -114,7 +114,7 @@ export const favoritesApi = {
   async addFavorite(propertyId) {
     try {
       console.log('⭐ Ajout aux favoris:', propertyId);
-      const response = await api.post('/api/favorites', { propertyId });
+      const response = await api.post('/favorites', { propertyId });
       return response.data;
     } catch (error) {
       console.error('❌ Erreur add favorite:', error);
@@ -126,7 +126,7 @@ export const favoritesApi = {
   async removeFavorite(propertyId) {
     try {
       console.log('❌ Retrait des favoris:', propertyId);
-      const response = await api.delete(`/api/favorites/${propertyId}`);
+      const response = await api.delete(`/favorites/${propertyId}`);
       return response.data;
     } catch (error) {
       console.error('❌ Erreur remove favorite:', error);
@@ -137,7 +137,7 @@ export const favoritesApi = {
   // Récupérer les IDs des propriétés favorites
   async getFavoritePropertyIds() {
     try {
-      const response = await api.get('/api/favorites/ids');
+      const response = await api.get('/favorites/ids');
       return response.data;
     } catch (error) {
       console.error('❌ Erreur récupération IDs favoris:', error);
@@ -149,7 +149,7 @@ export const favoritesApi = {
   // Vérifier si une propriété est dans les favoris
   async checkFavoriteStatus(propertyId) {
     try {
-      const response = await api.get(`/api/favorites/check/${propertyId}`);
+      const response = await api.get(`/favorites/check/${propertyId}`);
       return response.data;
     } catch (error) {
       console.error('❌ Erreur vérification statut favori:', error);
