@@ -67,6 +67,31 @@ export const propertyApi = {
       }
     ];
   },
+    // Dans src/services/propertyApi.js
+    getNearbyProperties: (latitude, longitude, radius) => {
+      return api.post('/api/properties/nearby', {
+        latitude,
+        longitude,
+        radius: radius || 10,
+        page: 0,
+        size: 20
+      });
+    },
+      
+    getNearbyPropertiesForUser: (radius) => {
+      return api.get(`/api/properties/nearby/me${radius ? `?radius=${radius}` : ''}`);
+    },
+      
+    updateUserLocation: (latitude, longitude) => {
+      return api.post('/api/properties/user/location', null, {
+        params: { latitude, longitude }
+      });
+    },
+    
+    // NOUVELLE MÉTHODE : Propriétés proches de l'utilisateur
+    getNearbyPropertiesForUser: (radius) => {
+        return api.get(`/api/properties/nearby/me${radius ? `?radius=${radius}` : ''}`);
+    },
 
   // Récupérer une propriété par ID
   async getPropertyById(id) {
@@ -94,6 +119,11 @@ export const propertyApi = {
       return [mockProperties[0]];
     }
   },
+  updateUserLocation: (latitude, longitude) => {
+        return api.post('/api/properties/user/location', null, {
+            params: { latitude, longitude }
+        });
+    },
 
   // Récupérer toutes les propriétés avec statut favori
   async getPropertiesWithFavorites() {

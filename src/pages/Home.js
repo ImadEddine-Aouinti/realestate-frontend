@@ -1,17 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authUtils } from '../utils/auth.js';
 import { propertyApi } from '../services/propertyApi.js';
+import locationApi from '../services/locationApi.js';
+
+// Import des nouveaux composants
+import NearbyFilter from '../components/NearbyFilter.js';
+import LocationPermissionDialog from '../components/LocationPermissionDialog.js';
+import PropertyDistanceChip from '../components/PropertyDistanceChip.js';
 
 const Home = () => {
   const [properties, setProperties] = useState([]);
+  const [nearbyProperties, setNearbyProperties] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingLocation, setLoadingLocation] = useState(false);
   const [filters, setFilters] = useState({
     type: '',
     status: '',
     minPrice: '',
     maxPrice: ''
+  });
+  
+  // États pour la géolocalisation
+  const [locationFilter, setLocationFilter] = useState({
+    radius: 10,
+    useCurrentLocation: false
   });
   const [currentSlide, setCurrentSlide] = useState(0);
   const [stats, setStats] = useState({
@@ -25,11 +39,18 @@ const Home = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showLocationDialog, setShowLocationDialog] = useState(false);
   const [currentPropertyId, setCurrentPropertyId] = useState(null);
   const [message, setMessage] = useState('');
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
-  const [modalType, setModalType] = useState('info'); // 'info', 'success', 'error', 'warning'
+  const [modalType, setModalType] = useState('info');
+  
+  // États pour la géolocalisation
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [isGeolocationSupported, setIsGeolocationSupported] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const user = authUtils.getUser();
   const isAuthenticated = authUtils.isAuthenticated();
@@ -57,28 +78,62 @@ const Home = () => {
     }
   ];
 
+  // Vérifier le support de la géolocalisation au chargement
   useEffect(() => {
-    fetchProperties();
-    if (isAuthenticated) {
-      fetchFavorites();
-    }
-    loadStats();
+    const checkGeolocationSupport = async () => {
+      const supported = locationApi.isGeolocationSupported();
+      setIsGeolocationSupported(supported);
+      
+      if (supported) {
+        try {
+          const permission = await locationApi.requestPermission();
+          if (permission === 'granted') {
+            setLocationEnabled(true);
+          }
+        } catch (err) {
+          console.log('Erreur vérification permission:', err);
+        }
+      }
+    };
     
-    // Carousel automatique
+    checkGeolocationSupport();
+    setIsInitialized(true);
+  }, []);
+
+  // Initialisation - ne s'exécute qu'une fois
+  useEffect(() => {
+    if (isInitialized) {
+      const init = async () => {
+        setLoading(true);
+        await fetchProperties();
+        if (isAuthenticated) {
+          await fetchFavorites();
+        }
+        loadStats();
+        setLoading(false);
+      };
+      init();
+    }
+  }, [isAuthenticated, isInitialized]);
+
+  // Carousel automatique - séparé
+  useEffect(() => {
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
     }, 5000);
     
     return () => clearInterval(interval);
-  }, [isAuthenticated]);
+  }, [heroSlides.length]);
 
-  const fetchProperties = async () => {
+  // Charger les propriétés en fonction des filtres - utilise useCallback
+  const fetchProperties = useCallback(async () => {
     try {
       setLoading(true);
       console.log('🔄 Chargement des propriétés...');
       const propertiesData = await propertyApi.getAllProperties(filters);
       console.log('✅ Propriétés chargées:', propertiesData);
       setProperties(propertiesData);
+      setNearbyProperties([]);
       
       // Mettre à jour les stats avec les vraies données
       setStats(prev => ({
@@ -92,10 +147,86 @@ const Home = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  const fetchNearbyProperties = useCallback(async () => {
+    if (!userLocation) {
+      setShowLocationDialog(true);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setLoadingLocation(true);
+      
+      let nearbyData;
+      
+      if (isAuthenticated) {
+        // Utiliser l'endpoint pour l'utilisateur connecté
+        nearbyData = await propertyApi.getNearbyPropertiesForUser(locationFilter.radius);
+      } else {
+        // Utiliser les coordonnées actuelles
+        nearbyData = await propertyApi.getNearbyProperties(
+          userLocation.latitude,
+          userLocation.longitude,
+          locationFilter.radius
+        );
+      }
+      
+      // Adapter selon la structure de la réponse
+      const nearbyPropertiesList = nearbyData.data?.content || nearbyData.data || nearbyData;
+      setNearbyProperties(nearbyPropertiesList);
+      setProperties([]);
+      
+      // Enregistrer la localisation si l'utilisateur est connecté
+      if (isAuthenticated && userLocation) {
+        try {
+          await propertyApi.updateUserLocation(
+            userLocation.latitude,
+            userLocation.longitude
+          );
+          console.log('Localisation utilisateur mise à jour');
+        } catch (updateError) {
+          console.warn('Erreur mise à jour localisation:', updateError);
+        }
+      }
+      
+      // Mettre à jour les stats
+      setStats(prev => ({
+        ...prev,
+        totalProperties: nearbyPropertiesList.length
+      }));
+    } catch (err) {
+      console.error('Erreur chargement propriétés proches:', err);
+      setModalTitle('Erreur');
+      setModalMessage('Erreur lors du chargement des propriétés à proximité');
+      setModalType('error');
+      setShowMessageModal(true);
+      setNearbyProperties([]);
+      await fetchProperties(); // Revenir aux propriétés normales
+    } finally {
+      setLoading(false);
+      setLoadingLocation(false);
+    }
+  }, [userLocation, locationFilter.radius, isAuthenticated, fetchProperties]);
+
+  // Charger les propriétés quand les filtres changent - avec conditions
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const loadProperties = async () => {
+      if (locationFilter.useCurrentLocation && userLocation) {
+        await fetchNearbyProperties();
+      } else {
+        await fetchProperties();
+      }
+    };
+
+    loadProperties();
+  }, [locationFilter.useCurrentLocation, filters, isInitialized, userLocation, fetchProperties, fetchNearbyProperties]);
 
   // Fonction de démonstration si l'API ne répond pas
-  const getDemoProperties = () => {
+  const getDemoProperties = useCallback(() => {
     return [
       {
         id: 1,
@@ -164,9 +295,9 @@ const Home = () => {
         ]
       }
     ];
-  };
+  }, []);
 
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     try {
       console.log('🔄 Chargement des favoris...');
       const favoritesData = await propertyApi.getUserFavorites();
@@ -175,17 +306,18 @@ const Home = () => {
     } catch (error) {
       console.error('❌ Erreur lors du chargement des favoris:', error);
     }
-  };
+  }, []);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(() => {
     // Simulation de données statistiques
+    const displayedProperties = locationFilter.useCurrentLocation ? nearbyProperties : properties;
     setStats({
-      totalProperties: properties.length || 1250,
+      totalProperties: displayedProperties.length || 1250,
       happyClients: 890,
       citiesCovered: 45,
       yearsExperience: 12
     });
-  };
+  }, [locationFilter.useCurrentLocation, nearbyProperties, properties]);
 
   const handleFilterChange = (e) => {
     setFilters({
@@ -194,13 +326,58 @@ const Home = () => {
     });
   };
 
-  const handleSearch = (e) => {
+  const handleLocationFilterChange = useCallback((newFilter) => {
+    setLocationFilter(newFilter);
+    
+    if (newFilter.useCurrentLocation && !userLocation) {
+      setShowLocationDialog(true);
+    }
+  }, [userLocation]);
+
+  const handleUseMyLocation = useCallback(async () => {
+    try {
+      setLoadingLocation(true);
+      const location = await locationApi.getUserLocation();
+      setUserLocation(location);
+      setLocationEnabled(true);
+      setShowLocationDialog(false);
+      
+      // Mettre à jour le filtre pour utiliser la localisation
+      setLocationFilter(prev => ({ ...prev, useCurrentLocation: true }));
+    } catch (err) {
+      console.error('Erreur géolocalisation:', err);
+      setModalTitle('Erreur de géolocalisation');
+      setModalMessage(err.message || 'Impossible d\'obtenir votre position');
+      setModalType('error');
+      setShowMessageModal(true);
+      setLocationEnabled(false);
+      setLocationFilter(prev => ({ ...prev, useCurrentLocation: false }));
+    } finally {
+      setLoadingLocation(false);
+    }
+  }, []);
+
+  const handleUseAddressLocation = useCallback(() => {
+    setLocationFilter(prev => ({ ...prev, useCurrentLocation: false }));
+    setLocationEnabled(false);
+  }, []);
+
+  const handleGrantLocation = useCallback(() => {
+    handleUseMyLocation();
+  }, [handleUseMyLocation]);
+
+  const handleDenyLocation = useCallback(() => {
+    setShowLocationDialog(false);
+    setLocationFilter(prev => ({ ...prev, useCurrentLocation: false }));
+  }, []);
+
+  const handleSearch = useCallback((e) => {
     e.preventDefault();
     console.log('🔍 Recherche avec filtres:', filters);
-    fetchProperties();
-  };
+    // Le useEffect s'occupera du rechargement
+  }, [filters]);
 
-  const handleFavoriteToggle = async (propertyId) => {
+  const handleFavoriteToggle = useCallback(async (propertyId) => {
     if (!isAuthenticated) {
       setModalTitle('Connexion requise');
       setModalMessage('Veuillez vous connecter pour ajouter des propriétés à vos favoris');
@@ -235,9 +412,9 @@ const Home = () => {
       setModalType('error');
       setShowMessageModal(true);
     }
-  };
+  }, [isAuthenticated, favorites]);
 
-  const handleContactAgent = (propertyId) => {
+  const handleContactAgent = useCallback((propertyId) => {
     if (!isAuthenticated) {
       setModalTitle('Connexion requise');
       setModalMessage('Veuillez vous connecter pour contacter l\'agent');
@@ -250,9 +427,9 @@ const Home = () => {
     setCurrentPropertyId(propertyId);
     setMessage('');
     setShowContactModal(true);
-  };
+  }, [isAuthenticated]);
 
-  const submitContactMessage = async () => {
+  const submitContactMessage = useCallback(async () => {
     if (!message.trim()) {
       setModalTitle('Message vide');
       setModalMessage('Veuillez entrer un message');
@@ -276,31 +453,35 @@ const Home = () => {
       setModalType('error');
       setShowMessageModal(true);
     }
-  };
+  }, [message, currentPropertyId]);
 
-  const handleViewDetails = (propertyId) => {
+  const handleViewDetails = useCallback((propertyId) => {
     navigate(`/property/${propertyId}`);
-  };
+  }, [navigate]);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setFilters({
       type: '',
       status: '',
       minPrice: '',
       maxPrice: ''
     });
+    setLocationFilter({
+      radius: 10,
+      useCurrentLocation: false
+    });
     console.log('🗑️ Filtres effacés');
-  };
+  }, []);
 
-  const nextSlide = () => {
+  const nextSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
-  };
+  }, [heroSlides.length]);
 
-  const prevSlide = () => {
+  const prevSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
-  };
+  }, [heroSlides.length]);
 
-  const goToLogin = () => {
+  const goToLogin = useCallback(() => {
     setShowLoginModal(false);
     navigate('/login', {
       state: {
@@ -308,10 +489,18 @@ const Home = () => {
         returnUrl: `/property/${currentPropertyId}`
       }
     });
-  };
+  }, [navigate, modalMessage, currentPropertyId]);
+
+  const handleViewAllProperties = useCallback(() => {
+    setLocationFilter({
+      radius: 10,
+      useCurrentLocation: false
+    });
+    setLocationEnabled(false);
+  }, []);
 
   // Fonction pour obtenir les styles selon le type de modal
-  const getModalStyles = (type) => {
+  const getModalStyles = useCallback((type) => {
     const baseStyles = "bg-gradient-to-r rounded-t-2xl p-6 ";
     switch(type) {
       case 'success':
@@ -324,9 +513,9 @@ const Home = () => {
       default:
         return baseStyles + "from-blue-500 to-indigo-500";
     }
-  };
+  }, []);
 
-  const getModalIcon = (type) => {
+  const getModalIcon = useCallback((type) => {
     switch(type) {
       case 'success':
         return '✅';
@@ -338,9 +527,30 @@ const Home = () => {
       default:
         return 'ℹ️';
     }
-  };
+  }, []);
 
-  if (loading) {
+  // Obtenir les propriétés à afficher
+  const displayedProperties = locationFilter.useCurrentLocation && userLocation 
+    ? nearbyProperties 
+    : properties;
+
+  // Fonction utilitaire pour obtenir l'image principale
+  const getMainImageUrl = useCallback((property) => {
+    if (property.images && property.images.length > 0) {
+      const mainImage = property.images.find(img => img.isMain);
+      return mainImage ? mainImage.url : property.images[0].url;
+    }
+    return null;
+  }, []);
+
+  // Mettre à jour les stats quand les propriétés changent
+  useEffect(() => {
+    if (isInitialized) {
+      loadStats();
+    }
+  }, [displayedProperties, isInitialized, loadStats]);
+
+  if (loading && !loadingLocation) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -353,6 +563,15 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      {/* Dialog de permission de localisation */}
+      <LocationPermissionDialog
+        open={showLocationDialog}
+        onClose={handleDenyLocation}
+        onGrant={handleGrantLocation}
+        onDeny={handleDenyLocation}
+        isGeolocationSupported={isGeolocationSupported}
+      />
+
       {/* Modales */}
       
       {/* Modal de connexion */}
@@ -543,7 +762,7 @@ const Home = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 backdrop-blur-sm bg-white/10 rounded-2xl p-6 border border-white/20">
                 <div className="text-center">
                   <div className="text-2xl md:text-3xl font-bold text-white mb-1">
-                    {properties.length}+
+                    {displayedProperties.length}+
                   </div>
                   <div className="text-blue-100 text-sm">Propriétés</div>
                 </div>
@@ -585,7 +804,18 @@ const Home = () => {
 
       {/* Section des propriétés */}
       <div id="property-list" className="container mx-auto px-4 py-16">
-        {/* Filtres de recherche */}
+        {/* Filtre de proximité */}
+        <NearbyFilter
+          onFilterChange={handleLocationFilterChange}
+          onUseMyLocation={handleUseMyLocation}
+          onUseAddressLocation={handleUseAddressLocation}
+          defaultRadius={locationFilter.radius}
+          isLoading={loadingLocation}
+          locationEnabled={locationEnabled}
+          userLocation={userLocation}
+        />
+
+        {/* Filtres de recherche traditionnels */}
         <div className="bg-white rounded-2xl shadow-2xl p-8 mb-16 border border-gray-100">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Recherche Avancée</h2>
           <p className="text-gray-600 mb-8">Affinez votre recherche selon vos critères</p>
@@ -663,33 +893,73 @@ const Home = () => {
           </form>
         </div>
 
+        {/* Message d'information pour la recherche par localisation */}
+        {locationFilter.useCurrentLocation && userLocation && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between">
+              <div className="flex items-center mb-4 md:mb-0">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-4">
+                  <span className="text-blue-600 text-xl">📍</span>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-blue-800">Recherche par localisation</h3>
+                  <p className="text-blue-600 text-sm">
+                    Affichage des propriétés disponibles dans un rayon de {locationFilter.radius}km
+                    {locationEnabled && ` autour de votre position actuelle`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleViewAllProperties}
+                className="px-6 py-2 border border-blue-600 text-blue-600 rounded-xl font-semibold hover:bg-blue-50 transition-all duration-200"
+              >
+                Voir toutes les propriétés
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Liste des propriétés */}
         <div>
           <div className="flex justify-between items-center mb-8">
             <div>
               <h2 className="text-3xl font-bold text-gray-900">
-                Propriétés Disponibles
+                {locationFilter.useCurrentLocation && userLocation 
+                  ? 'Propriétés à proximité' 
+                  : 'Propriétés Disponibles'}
               </h2>
               <p className="text-gray-600 mt-2">
-                {properties.length} bien{properties.length > 1 ? 's' : ''} correspondant à vos critères
+                {displayedProperties.length} bien{displayedProperties.length > 1 ? 's' : ''} correspondant à vos critères
               </p>
             </div>
           </div>
 
-          {properties.length === 0 ? (
+          {displayedProperties.length === 0 ? (
             <div className="bg-white rounded-2xl shadow-lg p-12 text-center border border-gray-100">
               <div className="text-6xl mb-4">🏠</div>
               <p className="text-gray-500 text-lg font-semibold">Aucune propriété trouvée</p>
-              <p className="text-gray-400 mt-2">Essayez de modifier vos critères de recherche</p>
+              <p className="text-gray-400 mt-2">
+                {locationFilter.useCurrentLocation && userLocation 
+                  ? `Essayez d'augmenter le rayon de recherche ou modifiez vos critères.` 
+                  : 'Essayez de modifier vos critères de recherche.'}
+              </p>
+              {locationFilter.useCurrentLocation && (
+                <button
+                  onClick={handleViewAllProperties}
+                  className="mt-4 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all duration-200"
+                >
+                  Voir toutes les propriétés
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {properties.map((property) => (
+              {displayedProperties.map((property) => (
                 <div key={property.id} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 hover:scale-105 group border border-gray-100">
                   <div className="h-56 bg-gray-200 relative overflow-hidden">
-                    {property.images && property.images.length > 0 ? (
+                    {getMainImageUrl(property) ? (
                       <img
-                        src={property.images.find(img => img.isMain)?.url || property.images[0].url}
+                        src={getMainImageUrl(property)}
                         alt={property.title}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       />
@@ -711,6 +981,17 @@ const Home = () => {
                       </span>
                     </div>
 
+                    {/* Badge distance si disponible */}
+                    {property.distance && (
+                      <div className="absolute top-4 right-16">
+                        <PropertyDistanceChip 
+                          distance={property.distance} 
+                          showIcon={false}
+                          variant="filled"
+                        />
+                      </div>
+                    )}
+
                     {/* Bouton favori */}
                     <button
                       onClick={() => handleFavoriteToggle(property.id)}
@@ -731,7 +1012,7 @@ const Home = () => {
                       </h3>
                       <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full font-semibold">
                         {property.type === 'HOUSE' ? '🏠 Maison' :
-                         property.type === 'APARTMENT' ? '🏢Appart' : '🏰 Villa'}
+                         property.type === 'APARTMENT' ? '🏢 Appartement' : '🏰 Villa'}
                       </span>
                     </div>
                     
@@ -746,6 +1027,13 @@ const Home = () => {
                           currency: 'EUR'
                         }).format(property.price)}
                       </span>
+                      {property.distance && (
+                        <PropertyDistanceChip 
+                          distance={property.distance} 
+                          showIcon={true}
+                          variant="outlined"
+                        />
+                      )}
                     </div>
 
                     <div className="space-y-3">
